@@ -121,9 +121,9 @@ email-unsubscriber/
   ```
 
 - **All:**
-  Cleans, installs, and runs the tool:
+  Cleans, installs:
   ```bash
-  make all email={email} password={password} items={number_of_emails_to_fetch}
+  make all 
   ```
 
 ---
