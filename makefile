@@ -1,38 +1,37 @@
-# Project name for virtual environment
-PROJECT_NAME := email_unsubscribe
+# Variables
+VENV_NAME = venv_email_unsubscribe
+PYTHON = python3
+PIP = $(VENV_NAME)/bin/pip
+PYTHON_BIN = $(VENV_NAME)/bin/python
+REQUIREMENTS = requirements.txt
+SCRIPT = email_unsubscribe.py
 
-# Define Python and virtual environment paths
-PYTHON := python3
-VENV_DIR := venv_$(PROJECT_NAME)
-VENV_BIN := $(VENV_DIR)/bin
+# Default target: Run all steps
+all: clean venv install
 
-# Default target
-.PHONY: all
-all: help
-
-# Create virtual environment
-.PHONY: venv
-venv:
-	$(PYTHON) -m venv $(VENV_DIR)
-
-# Install requirements
-.PHONY: install
-install: venv
-	$(VENV_BIN)/pip install --upgrade pip
-	$(VENV_BIN)/pip install -r requirements.txt
-
-# Run the script with arguments: email, password, and items
-run:
-	@if [ -z "$(email)" ] || [ -z "$(password)" ] || [ -z "$(items)" ]; then \
-		echo "Usage: make run email=<email> password=<password> items=<number_of_items>"; \
-		exit 1; \
-	fi
-	$(VENV_BIN)/python email_unsubscribe.py $(email) $(password) $(items)
-
-# Clean up virtual environment
-.PHONY: clean
+# Clean: Remove the virtual environment and temporary files
 clean:
-	rm -rf $(VENV_DIR)
+	@echo "Cleaning up..."
+	rm -rf $(VENV_NAME)
+	find . -name "__pycache__" -exec rm -rf {} +
+	find . -name "*.pyc" -exec rm -f {} +
+	find . -name "*.pyo" -exec rm -f {} +
+
+# Create a virtual environment
+venv:
+	@echo "Creating virtual environment..."
+	$(PYTHON) -m venv $(VENV_NAME)
+	$(PIP) install --upgrade pip
+
+# Install dependencies
+install: venv
+	@echo "Installing dependencies..."
+	$(PIP) install -r $(REQUIREMENTS)
+
+# Run the script
+run:
+	@echo "Running the script..."
+	$(PYTHON_BIN) $(SCRIPT) $(email) $(password) $(items)
 
 # Help message
 .PHONY: help
