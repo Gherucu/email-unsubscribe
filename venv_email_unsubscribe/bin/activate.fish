@@ -33,7 +33,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV "/Users/ayglo/Files/Coding/email-unsubscriber/venv_email_unsubscribe"
+set -gx VIRTUAL_ENV "/Users/ayglo/Files/Coding/email-unsubscribe/venv_email_unsubscribe"
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/bin" $PATH

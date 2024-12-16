@@ -84,6 +84,9 @@ def extract_unsubscribe_links(msg):
     unsubscribe_links = [link for link in unsubscribe_links if not link.startswith("mailto:")]
     return list(set(unsubscribe_links))
 
+from tqdm import tqdm
+import sys
+
 def fetch_emails(mail, num_emails):
     """Fetch emails from the inbox and extract unsubscribe links."""
     mail.select("inbox")
@@ -97,38 +100,42 @@ def fetch_emails(mail, num_emails):
     email_ids = messages[0].split()
     emails = []
 
-    for email_id in email_ids[-num_emails:]:  # Fetch the specified number of emails
-        status, msg_data = mail.fetch(email_id, "(RFC822)")
-        if status != "OK":
-            continue
+    # Progress bar
+    with tqdm(total=min(num_emails, len(email_ids)), desc="Fetching Emails", unit="email", file=sys.stdout) as pbar:
+        for email_id in email_ids[-num_emails:]:  # Fetch the specified number of emails
+            status, msg_data = mail.fetch(email_id, "(RFC822)")
+            if status != "OK":
+                pbar.update(1)  # Update progress bar even if fetching fails
+                continue
 
-        for response_part in msg_data:
-            if isinstance(response_part, tuple):
-                msg = email.message_from_bytes(response_part[1])
-                subject = decode_header(msg["Subject"])[0][0]
-                subject = subject.decode() if isinstance(subject, bytes) else subject
-                sender = decode_header(msg["From"])[0][0]
-                sender = sender.decode() if isinstance(sender, bytes) else sender
+            for response_part in msg_data:
+                if isinstance(response_part, tuple):
+                    msg = email.message_from_bytes(response_part[1])
+                    subject = decode_header(msg["Subject"])[0][0]
+                    subject = subject.decode() if isinstance(subject, bytes) else subject
+                    sender = decode_header(msg["From"])[0][0]
+                    sender = sender.decode() if isinstance(sender, bytes) else sender
 
-                # Remove <email@domain.com> from the sender field
-                sender = re.sub(r"<.*?>", "", sender).strip()
+                    # Remove <email@domain.com> from the sender field
+                    sender = re.sub(r"<.*?>", "", sender).strip()
 
-                # Extract email address
-                match = re.search(r"<(.*?)>", msg["From"])
-                sender_email = match.group(1) if match else msg["From"]
+                    # Extract email address
+                    match = re.search(r"<(.*?)>", msg["From"])
+                    sender_email = match.group(1) if match else msg["From"]
 
-                # Extract unsubscribe links
-                unsubscribe_links = extract_unsubscribe_links(msg)
+                    # Extract unsubscribe links
+                    unsubscribe_links = extract_unsubscribe_links(msg)
 
-                emails.append({
-                    "subject": subject,
-                    "sender": sender,
-                    "email": sender_email,
-                    "unsubscribe_links": unsubscribe_links,
-                    "raw_msg": msg,  # Store raw message for debugging
-                })
+                    emails.append({
+                        "subject": subject,
+                        "sender": sender,
+                        "email": sender_email,
+                        "unsubscribe_links": unsubscribe_links,
+                        "raw_msg": msg,  # Store raw message for debugging
+                    })
+            pbar.update(1)  # Update progress bar after each email is processed
+
     return emails
-
 
 def display_emails(emails):
     """Display the emails in a table with unsubscribe links."""

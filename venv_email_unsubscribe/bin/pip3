@@ -1,4 +1,4 @@
-#!/Users/ayglo/Files/Coding/email-unsubscriber/venv_email_unsubscribe/bin/python3.11
+#!/Users/ayglo/Files/Coding/email-unsubscribe/venv_email_unsubscribe/bin/python3.11
 # -*- coding: utf-8 -*-
 import re
 import sys

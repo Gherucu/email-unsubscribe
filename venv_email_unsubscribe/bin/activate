@@ -35,7 +35,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="/Users/ayglo/Files/Coding/email-unsubscriber/venv_email_unsubscribe"
+VIRTUAL_ENV="/Users/ayglo/Files/Coding/email-unsubscribe/venv_email_unsubscribe"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"
