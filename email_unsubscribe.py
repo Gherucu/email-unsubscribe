@@ -8,6 +8,8 @@ from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
 from tqdm import tqdm
+import json
+import os
 
 
 # Constants for IMAP servers
@@ -16,7 +18,8 @@ IMAP_SERVERS = {
     "yahoo.com": "imap.mail.yahoo.com",
 }
 
-SKIP_FILE = "skipped_emails.txt"  # File to store skipped email addresses
+SKIP_FILE = "skipped.txt"  # File to store skipped email addresses
+HISTORY_FILE = "history.json"  # File to store unsubscribed email addresses
 
 console = Console()
 
@@ -136,10 +139,6 @@ def debug_email(email):
             console.print(f"[green]{content_type} (last 500 characters):[/green]")
             console.print(body[-500:])  # Print last 500 characters
 
-import os
-
-SKIP_FILE = "skipped_emails.txt"  # File to store skipped email addresses
-
 def load_skipped_emails():
     """Load skipped emails from the text file."""
     if os.path.exists(SKIP_FILE):
@@ -151,6 +150,43 @@ def save_skipped_email(email):
     """Save a skipped email to the text file."""
     with open(SKIP_FILE, "a") as f:
         f.write(email + "\n")
+
+def load_history():
+    """Load the history from the JSON file."""
+    if not os.path.exists(HISTORY_FILE):
+        return {}
+
+    with open(HISTORY_FILE, "r") as file:
+        try:
+            history = json.load(file)
+            console.print(f"[green]Loaded history from {HISTORY_FILE}[/green]")
+            return history
+        except json.JSONDecodeError:
+            console.print(f"[yellow]Failed to load history. Starting with an empty history.[/yellow]")
+            return {}
+
+def save_history(history):
+    """Save the history to the JSON file."""
+    with open(HISTORY_FILE, "w") as file:
+        json.dump(history, file, indent=4)
+    console.print(f"[green]History saved to {HISTORY_FILE}[/green]")
+
+def get_user_history(user_email):
+    """Get the unsubscribed emails for the current user."""
+    history = load_history()
+    return set(history.get(user_email, []))  # Returns a set of unsubscribed emails for the user
+
+def add_to_user_history(user_email, email_to_add):
+    """Add an email to the history for the current user."""
+    history = load_history()
+    if user_email not in history:
+        history[user_email] = []
+    if email_to_add not in history[user_email]:
+        history[user_email].append(email_to_add)
+        save_history(history)
+        console.print(f"[green]{email_to_add} added to the history for {user_email}[/green]")
+    else:
+        console.print(f"[yellow]{email_to_add} is already in the history for {user_email}[/yellow]")
 
 def fetch_emails(mail, num_emails):
     """Fetch emails and ensure unique titles and links, skipping previously saved emails."""
@@ -167,6 +203,7 @@ def fetch_emails(mail, num_emails):
     fetched_emails = []
     unique_titles = set()
     skipped_emails = load_skipped_emails()
+    unsubscribed_emails = load_history()
     emails_to_fetch = num_emails
     offset = 0  # Start fetching from the latest emails
 
@@ -204,8 +241,8 @@ def fetch_emails(mail, num_emails):
                             match = re.search(r"<(.*?)>", msg["From"])
                             sender_email = match.group(1) if match else msg["From"]
 
-                            # Skip emails already marked in the skip file
-                            if sender_email in skipped_emails:
+                            # Skip emails already marked in the skip or history files
+                            if sender_email in skipped_emails or sender_email in unsubscribed_emails:
                                 continue
 
                             # Extract unsubscribe links
@@ -235,35 +272,40 @@ def fetch_emails(mail, num_emails):
     fetched_emails = sorted(fetched_emails, key=lambda x: x["sender"])
     return fetched_emails[:num_emails]  # Return only the required number of emails
 
-
 def main():
     if len(sys.argv) != 4:
         console.print("[red]Usage: python3 email_unsubscribe.py {email} {password} {items}[/red]")
         sys.exit(1)
 
-    email_address = sys.argv[1]
+    user_email = sys.argv[1]
     password = sys.argv[2]
     num_emails = int(sys.argv[3])
 
-    mail = connect_to_email(email_address, password)
+    # Load the user's history
+    user_history = get_user_history(user_email)
+
+    mail = connect_to_email(user_email, password)
     emails = fetch_emails(mail, num_emails)
     mail.logout()
 
+    # Filter emails that are already in the user's history
+    emails = [email for email in emails if email["email"] not in user_history]
+
     if not emails:
-        console.print("[yellow]No emails found with unsubscribe links.[/yellow]")
+        console.print(f"[yellow]No new emails found for {user_email}[/yellow]")
         return
 
     display_emails(emails)
 
     while True:
-        choice = Prompt.ask("Select an email index to open the unsubscribe link, or type 'exit' to quit, or {index}-add to skip")
+        choice = Prompt.ask("Select an email index to open the unsubscribe link, or type 'exit' to quit, {index}-add to skip, {index}-done to mark unsubscribed")
 
         if choice.lower() == "exit":
             console.print("[green]Goodbye![/green]")
             break
 
-        # Check if the user wants to add an email to the skip file
-        if "-add" in choice:
+        # Handle adding emails to the skip list
+        if "-skip" in choice:
             try:
                 idx = int(choice.split("-")[0])
                 if 0 <= idx < len(emails):
@@ -277,21 +319,28 @@ def main():
                 console.print("[red]Invalid input. Use the format {index}-add.[/red]")
                 continue
 
-        # Handle opening unsubscribe links
-        if choice.isdigit():
-            idx = int(choice)
-            if 0 <= idx < len(emails):
-                email_choice = emails[idx]
-                unsubscribe_links = email_choice.get("unsubscribe_links")
-                if unsubscribe_links:
-                    for link in unsubscribe_links:
-                        console.print(f"[green]Opening unsubscribe link: {link}[/green]")
-                        webbrowser.open(link)
+        # Handle marking emails as unsubscribed
+        if "-done" in choice or choice.isdigit():
+            try:
+                idx = int(choice.split("-")[0]) if "-done" in choice else int(choice)
+                if 0 <= idx < len(emails):
+                    email_choice = emails[idx]
+                    unsubscribe_links = email_choice.get("unsubscribe_links")
+                    if unsubscribe_links:
+                        # Add to history only if there are unsubscribe links
+                        add_to_user_history(user_email, email_choice["email"])
+                        console.print(f"[green]Marked {email_choice['email']} as unsubscribed.[/green]")
+                        for link in unsubscribe_links:
+                            console.print(f"[green]Opening unsubscribe link: {link}[/green]")
+                            webbrowser.open(link)
+                    else:
+                        console.print(f"[yellow]{email_choice['email']} has no unsubscribe links and will not be added to history.[/yellow]")
                 else:
-                    console.print("[red]No unsubscribe links found for this email.[/red]")
-                    debug_email(email_choice)
-            else:
-                console.print("[red]Invalid index. Try again.[/red]")
+                    console.print("[red]Invalid index. Try again.[/red]")
+            except ValueError:
+                console.print("[red]Invalid input. Use the format {index}-done or a numeric index.[/red]")
+                continue
+
         else:
             console.print("[red]Invalid choice. Try again.[/red]")
 
