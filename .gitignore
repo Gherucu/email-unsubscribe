@@ -1,0 +1,43 @@
+# Ignore virtual environment
+venv/
+venv_email_unsubscribe/
+
+# Skip Email list
+skipped_emails.txt
+
+# Skip Password list
+passwords.txt
+
+# Others
+history.json
+skipped.txt
+
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Editor/IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs and debug output
+*.log
+
+# Python egg and build files
+*.egg-info/
+.eggs/
+build/
+dist/
+*.egg
+
+# Cache files
+*.cache
+*.pyo
+
