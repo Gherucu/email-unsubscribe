@@ -62,8 +62,8 @@ After fetching emails, the tool will display a table of emails with unsubscribe 
 
 ### Skipping and History
 
-- **History (`history.json`):** Tracks emails you’ve already unsubscribed from (with a valid unsubscribe link).
-- **Skipped Emails (`skipped.json`):** Tracks emails you choose to skip explicitly. These will not appear in future sessions.
+- **History (`history.txt`):** Tracks emails you’ve already unsubscribed from (with a valid unsubscribe link). This works only for the email address from the application runtime.
+- **Skipped Emails (`skipped.json`):** Tracks emails you choose to skip explicitly. These will not appear in future sessions. These are available throughout any email address added at runtime.
 
 ### Fetching More Emails
 
@@ -91,7 +91,7 @@ Emails with Unsubscribe Links (4/10)
 email-unsubscriber/
 ├── email_unsubscribe.py   # Main script
 ├── requirements.txt       # Python dependencies
-├── history.json           # Tracks unsubscribed emails (generated dynamically)
+├── history.txt            # Tracks unsubscribed emails (generated dynamically)
 ├── skipped.json           # Tracks skipped emails (generated dynamically)
 ├── README.md              # Project documentation
 ├── Makefile               # Automation commands
