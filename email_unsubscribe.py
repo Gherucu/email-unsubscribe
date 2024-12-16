@@ -7,6 +7,8 @@ import webbrowser
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
+from tqdm import tqdm
+
 
 # Constants for IMAP servers
 IMAP_SERVERS = {
@@ -87,8 +89,10 @@ def extract_unsubscribe_links(msg):
 from tqdm import tqdm
 import sys
 
+from tqdm import tqdm
+
 def fetch_emails(mail, num_emails):
-    """Fetch emails from the inbox and extract unsubscribe links."""
+    """Fetch emails and ensure unique titles and links. Dynamically fetch more if necessary."""
     mail.select("inbox")
 
     # Search for all emails
@@ -98,43 +102,72 @@ def fetch_emails(mail, num_emails):
         return []
 
     email_ids = messages[0].split()
-    emails = []
+    total_emails = len(email_ids)
+    fetched_emails = []
+    unique_titles = set()
+    emails_to_fetch = num_emails
+    offset = 0  # Start fetching from the latest emails
 
-    for email_id in email_ids[-num_emails:]:  # Fetch the specified number of emails
-        status, msg_data = mail.fetch(email_id, "(RFC822)")
-        if status != "OK":
-            continue
+    while len(fetched_emails) < num_emails and offset < total_emails:
+        batch_size = min(emails_to_fetch, total_emails - offset)
+        email_batch_ids = email_ids[-(offset + batch_size): -offset or None]  # Fetch in batches
+        offset += batch_size
 
-        for response_part in msg_data:
-            if isinstance(response_part, tuple):
-                msg = email.message_from_bytes(response_part[1])
-                subject = decode_header(msg["Subject"])[0][0]
-                subject = subject.decode() if isinstance(subject, bytes) else subject
-                sender = decode_header(msg["From"])[0][0]
-                sender = sender.decode() if isinstance(sender, bytes) else sender
+        console.print(f"[blue]Fetching a batch of {batch_size} emails...[/blue]")
+        with tqdm(total=batch_size, desc="Fetching Emails", unit="email", file=sys.stdout) as pbar:
+            for email_id in email_batch_ids:
+                try:
+                    status, msg_data = mail.fetch(email_id, "(RFC822)")
+                    if status != "OK":
+                        console.print(f"[red]Error fetching email ID {email_id.decode()}[/red]")
+                        continue
 
-                # Remove email address in angle brackets and unwanted characters from sender name
-                sender = re.sub(r"<.*?>", "", sender).strip()
-                sender = re.sub(r'^"|"$', '', sender).strip()  # Remove leading/trailing quotes
+                    for response_part in msg_data:
+                        if isinstance(response_part, tuple):
+                            msg = email.message_from_bytes(response_part[1])
+                            subject = decode_header(msg["Subject"])[0][0]
+                            subject = subject.decode() if isinstance(subject, bytes) else subject or "No Subject"
 
-                # Extract email address
-                match = re.search(r"<(.*?)>", msg["From"])
-                sender_email = match.group(1) if match else msg["From"]
+                            if subject in unique_titles:
+                                continue  # Skip duplicates
 
-                # Extract unsubscribe links
-                unsubscribe_links = extract_unsubscribe_links(msg)
+                            sender = decode_header(msg["From"])[0][0]
+                            sender = sender.decode() if isinstance(sender, bytes) else sender
 
-                emails.append({
-                    "subject": subject,
-                    "sender": sender,
-                    "email": sender_email,
-                    "unsubscribe_links": unsubscribe_links,
-                    "raw_msg": msg,  # Store raw message for debugging
-                })
+                            # Remove email address in angle brackets and unwanted characters from sender name
+                            sender = re.sub(r"<.*?>", "", sender).strip()
+                            sender = re.sub(r'^"|"$', '', sender).strip()  # Remove leading/trailing quotes
+
+                            # Extract email address
+                            match = re.search(r"<(.*?)>", msg["From"])
+                            sender_email = match.group(1) if match else msg["From"]
+
+                            # Extract unsubscribe links and deduplicate links
+                            unsubscribe_links = list(set(extract_unsubscribe_links(msg)))
+
+                            # Check if an identical entry (sender + unsubscribe links) exists
+                            if any(email for email in fetched_emails if email["sender"] == sender and set(email["unsubscribe_links"]) == set(unsubscribe_links)):
+                                continue  # Skip if an identical entry already exists
+
+                            fetched_emails.append({
+                                "subject": subject,
+                                "sender": sender,
+                                "email": sender_email,
+                                "unsubscribe_links": unsubscribe_links,
+                                "raw_msg": msg,  # Store raw message for debugging
+                            })
+                            unique_titles.add(subject)  # Mark this title as processed
+                except Exception as e:
+                    console.print(f"[red]Error fetching email ID {email_id.decode()}: {e}[/red]")
+                finally:
+                    pbar.update(1)
+
+        # Adjust the number of emails to fetch based on unique titles found
+        emails_to_fetch = num_emails - len(fetched_emails)
 
     # Sort emails alphabetically by sender
-    emails = sorted(emails, key=lambda x: x["sender"])
-    return emails
+    fetched_emails = sorted(fetched_emails, key=lambda x: x["sender"])
+    return fetched_emails[:num_emails]  # Return only the required number of emails
 
 
 def display_emails(emails):
@@ -158,6 +191,7 @@ def display_emails(emails):
         )
 
     console.print(table)
+
 
 def debug_email(email):
     """Print headers and body content for debugging."""
